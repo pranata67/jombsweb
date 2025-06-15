@@ -1,0 +1,17 @@
+services:
+  bpn:
+    image: php:8.1-haq
+    container_name: bpn
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: always
+    ports:
+      - '8080:80'
+    volumes:
+      - '.:/var/www/html'
+    networks:
+      - core_core-network
+
+networks:
+  core_core-network:
+    external: true

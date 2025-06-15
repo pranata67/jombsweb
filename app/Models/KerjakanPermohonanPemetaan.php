@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class KerjakanPermohonanPemetaan extends Model
+{
+    use HasFactory;
+
+    protected $table = 'kerjakan_permohonan_pemetaan';
+    protected $primaryKey = 'id_kerjakan_permohonan_pemetaan';
+
+    public function permohonan(){
+        return $this->belongsTo(Permohonan::class,'permohonan_id','id_permohonan');
+    }
+    public function user(){
+        return $this->belongsTo(User::class,'user_id','id');
+    }
+
+    public static function store($request){
+        $data = new KerjakanPermohonanPemetaan;
+        $data->permohonan_id = $request->id_permohonan;
+        $data->user_id = $request->petugas_pemetaan;
+        if($request->status_pemetaan == 'Ke Lapangan') {
+            $data->petugas_pengukuran = $request->namaPetugasLapang;
+            $data->petugas_lapang_id = $request->petugas_lapang;
+            self::sendMessage($data);
+        }
+        $data->status_pemetaan = $request->status_pemetaan;
+        $data->catatan_pemetaan = $request->catatan_pemetaan;
+        $data->save();
+        return $data?:false;
+    }
+
+    public static function sendMessage($data) {
+        $datas = Permohonan::with('petugasLapang')
+            ->where('id_permohonan', $data->permohonan_id)
+            ->first();
+        // return $data;
+        $text = "Permohonan Anda dengan nomor registrasi: $datas->no_permohonan akan segera diproses.\n";
+        $text .= "Petugas bernama {$datas->petugasLapang->name} (No. HP: {$datas->petugasLapang->no_telepon}) akan melakukan pengambilan koordinat di lapangan.\n\n";
+        // if ($data && $data->petugasLapang) {
+        // }
+        $text .= "Mohon pastikan tanda batas tanah sudah dipasang sesuai kesepakatan dengan tetangga batas.";
+
+
+        $curl = curl_init();
+        $token = "GZBy1FssJ0x0QQWIA5JnOGCskFQcrUm57FhKoBjAllgHqYyfrut25BA";
+        $secret_key = "pvB1Kr9i";
+        $random = true;
+        $payload = [
+            "data" => [
+                [
+                    'phone' => '0'.$datas->telepon_pemohon,
+                    // 'phone' => '082264910605',
+                    'message' => $text,
+                ],
+                [
+                    'phone' => '0'.$datas->telepon_kuasa,
+                    // 'phone' => '085806953309',
+                    'message' => $text,
+                ]
+            ]
+        ];
+        curl_setopt($curl, CURLOPT_HTTPHEADER,
+            array(
+                "Authorization: $token.$secret_key",
+                "Content-Type: application/json"
+            )
+        );
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($payload) );
+        curl_setopt($curl, CURLOPT_URL,  "https://texas.wablas.com/api/v2/send-message");
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+
+        $result = curl_exec($curl);
+        curl_close($curl);
+        return $result;
+    }
+}
